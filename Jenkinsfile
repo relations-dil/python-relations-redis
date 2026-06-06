@@ -9,7 +9,7 @@ pipeline {
         }
         stage('test') {
             steps {
-                sh 'make test'
+                sh 'make test NETWORK=$(git rev-parse --short=7 HEAD)'
             }
         }
         stage('lint') {

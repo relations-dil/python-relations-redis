@@ -2,9 +2,9 @@ ACCOUNT=gaf3
 IMAGE=python-relations-redis
 INSTALL=python:3.8.5-alpine3.12
 VERSION?=0.2.0
-NETWORK=relations.io
+NETWORK?=relations.io
 REDIS_IMAGE=redis:6.2-alpine
-REDIS_HOST=$(ACCOUNT)-$(IMAGE)-redis
+REDIS_HOST=$(ACCOUNT)-$(IMAGE)-redis-$(NETWORK)
 DEBUG_PORT=5678
 TTY=$(shell if tty -s; then echo "-it"; fi)
 VOLUMES=-v ${PWD}/lib:/opt/service/lib \
@@ -42,7 +42,7 @@ debug: redis
 	docker run $(TTY) --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) -p 127.0.0.1:$(DEBUG_PORT):5678 $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "python -m ptvsd --host 0.0.0.0 --port 5678 --wait -m unittest discover -v test"
 
 test: redis
-	docker run $(TTY) --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "coverage run -m unittest discover -v test && coverage report -m --include 'lib/*.py'"
+	docker run $(TTY) --rm --network=$(NETWORK) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "coverage run -m unittest discover -v test && coverage report -m --include 'lib/*.py'" ; status=$$? ; docker rm --force $(REDIS_HOST) ; [ "$(NETWORK)" = "relations.io" ] || docker network rm $(NETWORK) ; exit $$status
 
 lint:
 	docker run $(TTY) $(VOLUMES) $(ENVIRONMENT) $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "pylint --rcfile=.pylintrc lib/"
