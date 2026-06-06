@@ -86,6 +86,30 @@ class Source(relations.Source):
 
         return values
 
+    class UniqueError(relations.model.ModelError):
+        """
+        Exception for violating unique constraints
+        """
+
+    def uniques(self, model, values, id):
+        """
+        Checks unique constraints by scanning the model's existing records.
+
+        Redis has no native unique index, so (mirroring MockSource's semantics) we serialize each
+        unique field-set and compare against every other stored record. Called BEFORE the write, so
+        a violating record never persists -- Redis can't cheaply snapshot/rollback like MockSource.
+        """
+
+        for unique, fields in model._unique.items():
+
+            value = json.dumps({field: overscore.get(values, field) for field in fields}, sort_keys=True)
+
+            for id_other, record in self._items(model.NAME):
+                if str(id_other) != str(id):
+                    existing = json.dumps({field: overscore.get(record, field) for field in fields}, sort_keys=True)
+                    if existing == value:
+                        raise self.UniqueError(model, f"value {value} violates unique {unique}")
+
     def create(self, model):
         """
         Executes the create -- INCR an id, then SET the record's JSON
@@ -102,6 +126,8 @@ class Source(relations.Source):
             if model._id is not None and values.get(model._id) is None:
                 values[model._fields._names[model._id].store] = new_id
                 creating[model._id] = new_id
+
+            self.uniques(creating, values, new_id)
 
             self.connection.set(self._record_key(model.NAME, new_id), json.dumps(self.extract(creating, values)))
 
@@ -294,6 +320,7 @@ class Source(relations.Source):
                 if model._record.retrieve(data):
                     updated += 1
                     updating = {**data, **values}
+                    self.uniques(model, updating, id)
                     data.update(self.extract(model, copy.deepcopy(values)))
                     self.connection.set(self._record_key(model.NAME, id), json.dumps(data))
                     self.delete_ties(model, updating[model._id] if model._id else id)
@@ -307,6 +334,7 @@ class Source(relations.Source):
                 key = self._record_key(model.NAME, updating[model._id])
                 stored = json.loads(self.connection.get(key))
                 stored.update(data)
+                self.uniques(updating, stored, updating[model._id])
                 self.connection.set(key, json.dumps(stored))
 
                 self.delete_ties(updating)

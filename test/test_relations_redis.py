@@ -462,3 +462,32 @@ class TestSource(unittest.TestCase):
 
         plain = Plain(0, "nope").create()
         self.assertRaisesRegex(relations.ModelError, "plain: nothing to delete from", plain.delete)
+
+    def test_uniques(self):
+
+        Simple("ya").create()
+
+        # creating a duplicate of a unique field raises and does not persist
+
+        self.assertRaisesRegex(
+            relations_redis.Source.UniqueError,
+            'simple: value {"name": "ya"} violates unique name',
+            Simple("ya").create
+        )
+
+        self.assertEqual(Simple.many().name, ["ya"])
+
+        # updating into a duplicate raises and does not persist
+
+        Simple("sure").create()
+
+        sure = Simple.one(name="sure")
+        sure.name = "ya"
+
+        self.assertRaisesRegex(
+            relations_redis.Source.UniqueError,
+            'simple: value {"name": "ya"} violates unique name',
+            sure.update
+        )
+
+        self.assertEqual(sorted(Simple.many().name), ["sure", "ya"])
