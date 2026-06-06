@@ -159,16 +159,22 @@ class Source(relations.Source):
 
     def _items(self, name):
         """
-        Reads every stored record for a model as (id, values) pairs (skipping the id counter)
+        Reads every stored record for a model as (id, values) pairs (skipping the id counter).
+
+        Sorted by id ascending: Redis SCAN returns keys in no guaranteed order, so we sort to
+        match MockSource's deterministic base order (it iterates its dict in insertion = id order).
+        Without this, any unsorted retrieve (e.g. titles) is non-deterministic across Redis instances.
         """
 
         prefix = self._store_key(name)
 
-        return [
+        items = [
             (key.rsplit(":", 1)[-1], json.loads(self.connection.get(key)))
             for key in self.connection.scan_iter(match=f"{prefix}:*")
             if not key.endswith(":_id")
         ]
+
+        return sorted(items, key=lambda item: int(item[0]))
 
     def model_like(self, model):
         """
