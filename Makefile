@@ -1,7 +1,7 @@
 ACCOUNT=gaf3
 IMAGE=python-relations-redis
 INSTALL=python:3.8.5-alpine3.12
-VERSION?=0.2.0
+VERSION?=$(shell cat VERSION)
 NETWORK?=relations.io
 REDIS_IMAGE=redis:6.2-alpine
 REDIS_HOST=$(ACCOUNT)-$(IMAGE)-redis-$(NETWORK)
@@ -11,6 +11,7 @@ VOLUMES=-v ${PWD}/lib:/opt/service/lib \
 		-v ${PWD}/test:/opt/service/test \
 		-v ${PWD}/redis.sh:/opt/service/redis.sh \
 		-v ${PWD}/.pylintrc:/opt/service/.pylintrc \
+		-v ${PWD}/VERSION:/opt/service/VERSION \
 		-v ${PWD}/setup.py:/opt/service/setup.py
 ENVIRONMENT=-e REDIS_HOST=$(REDIS_HOST) \
 			-e REDIS_PORT=6379 \
