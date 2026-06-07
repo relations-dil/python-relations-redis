@@ -355,6 +355,34 @@ class TestSource(unittest.TestCase):
         model = Net.many(subnet__max_value=int(ipaddress.IPv4Address('1.2.3.0')))
         self.assertEqual(len(model), 0)
 
+        # ties: retrieved records carry their tie ids, and tie membership filters
+
+        tom = Bro("Tom").create()
+        dick = Bro("Dick").create()
+        mary = Sis("Mary", bro_id=[tom.id, dick.id]).create()
+
+        self.assertEqual(sorted(Sis.one(mary.id).bro.id), sorted([tom.id, dick.id]))
+
+        self.assertEqual(Sis.many(bro_id=[tom.id])[0].name, "Mary")
+        self.assertEqual(len(Sis.many(bro_id=[999])), 0)
+
+    def test_retrieve_ties_query(self):
+
+        tom = Bro("Tom").create()
+        dick = Bro("Dick").create()
+        harry = Bro("Harry").create()
+
+        Sis("Mary", bro_id=[tom.id, dick.id]).create()
+        Sis("Sue", bro_id=[tom.id]).create()
+        Sis("Ann", bro_id=[dick.id, harry.id]).create()
+
+        self.assertEqual(sorted(Sis.many(bro_id__has=tom.id).name), ["Mary", "Sue"])
+        self.assertEqual(sorted(Sis.many(bro_id__any=[tom.id, harry.id]).name), ["Ann", "Mary", "Sue"])
+        self.assertEqual(Sis.many(bro_id__all=[tom.id, dick.id]).name, ["Mary"])
+        self.assertEqual(len(Sis.many(bro_id__all=[tom.id, harry.id])), 0)
+        self.assertEqual(Sis.many(bro_id__not_has=tom.id).name, ["Ann"])
+        self.assertEqual(sorted(Sis.many(bro_id__not_any=[harry.id]).name), ["Mary", "Sue"])
+
     def test_count(self):
 
         Unit([["stuff"], ["people"]]).create()
@@ -444,6 +472,19 @@ class TestSource(unittest.TestCase):
         self.assertEqual(Net.one(ping.id).ip.compressed, "13.14.15.16")
         self.assertEqual(Net.one(pong.id).ip.compressed, "5.6.7.8")
 
+        # ties: both the per-id and the mass (retrieve) update paths re-write ties
+
+        tom = Bro("Tom").create()
+        dick = Bro("Dick").create()
+        harry = Bro("Harry").create()
+        mary = Sis("Mary", bro_id=[tom.id, dick.id]).create()
+
+        Sis.one(mary.id).set(bro_id=[dick.id, harry.id]).update()
+        self.assertEqual(sorted(Sis.one(mary.id).bro.id), sorted([dick.id, harry.id]))
+
+        Sis.many(name="Mary").set(bro_id=[tom.id]).update()
+        self.assertEqual(Sis.one(mary.id).bro.id, [tom.id])
+
     def test_delete(self):
 
         unit = Unit("people")
@@ -462,6 +503,18 @@ class TestSource(unittest.TestCase):
 
         plain = Plain(0, "nope").create()
         self.assertRaisesRegex(relations.ModelError, "plain: nothing to delete from", plain.delete)
+
+        # ties: deleting a record removes its tie records too
+
+        tom = Bro("Tom").create()
+        mary = Sis("Mary", bro_id=[tom.id]).create()
+
+        self.assertEqual(len(self.records("sis_bro")), 1)
+
+        Sis.one(mary.id).delete()
+
+        self.assertEqual(len(Sis.many()), 0)
+        self.assertEqual(self.records("sis_bro"), [])
 
     def test_uniques(self):
 
