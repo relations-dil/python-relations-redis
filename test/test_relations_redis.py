@@ -383,6 +383,44 @@ class TestSource(unittest.TestCase):
         self.assertEqual(Sis.many(bro_id__not_has=tom.id).name, ["Ann"])
         self.assertEqual(sorted(Sis.many(bro_id__not_any=[harry.id]).name), ["Mary", "Sue"])
 
+    def test_retrieve_ties_attr(self):
+
+        # M2M attribute filtering rides the core Python path (redis is modeled on MockSource):
+        # filter by a tied sibling's field. Existence semantics, with the sibling's field operators.
+
+        tom = Bro("Tom").create()
+        dick = Bro("Dick").create()
+        harry = Bro("Harry").create()
+
+        Sis("Mary", bro_id=[tom.id, dick.id]).create()   # tied to Tom, Dick
+        Sis("Sue", bro_id=[tom.id]).create()             # tied to Tom
+        Sis("Ann", bro_id=[dick.id, harry.id]).create()  # tied to Dick, Harry
+
+        # tied to a brother with that name
+        self.assertEqual(sorted(Sis.many(bro__name="Tom").name), ["Mary", "Sue"])
+        self.assertEqual(Sis.many(bro__name="Harry").name, ["Ann"])
+        self.assertEqual(len(Sis.many(bro__name="Ghost")), 0)
+
+        # field operators land on the sibling: in (any of), like
+        self.assertEqual(sorted(Sis.many(bro__name__in=["Tom", "Dick"]).name), ["Ann", "Mary", "Sue"])
+        self.assertEqual(Sis.many(bro__name__like="arr").name, ["Ann"])
+
+        # negation is field-level: a tied non-Tom exists (Mary stays via Dick)
+        self.assertEqual(sorted(Sis.many(bro__name__not_in=["Tom"]).name), ["Ann", "Mary"])
+
+        # criteria on the same relation filter the SAME tied brother
+        self.assertEqual(Sis.many(bro__name="Dick", bro__id=harry.id).name, [])
+        self.assertEqual(sorted(Sis.many(bro__name="Dick", bro__id=dick.id).name), ["Ann", "Mary"])
+
+        # symmetric: brothers filtered by a tied sister's name
+        jane = Sis("Jane").create()
+        joan = Sis("Joan").create()
+        Bro("Bab", sis_id=[jane.id, joan.id]).create()
+        Bro("Bil", sis_id=[jane.id]).create()
+
+        self.assertEqual(sorted(Bro.many(sis__name="Jane").name), ["Bab", "Bil"])
+        self.assertEqual(Bro.many(sis__name__in=["Joan"]).name, ["Bab"])
+
     def test_count(self):
 
         Unit([["stuff"], ["people"]]).create()
