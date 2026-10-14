@@ -224,8 +224,8 @@ class TestSource(unittest.TestCase):
 
         # A repeated or missing id is refused and writes nothing
 
-        self.assertRaisesRegex(relations_redis.Source.UniqueError, 'value "abc.slug.main.unum" violates unique id', Slug("abc.slug.main.unum", "Dupe").create)
-        self.assertRaisesRegex(relations_redis.Source.UniqueError, "value null violates unique id", Slug(name="No id").create)
+        self.assertRaisesRegex(relations.UniqueError, 'value "abc.slug.main.unum" violates unique id', Slug("abc.slug.main.unum", "Dupe").create)
+        self.assertRaisesRegex(relations.UniqueError, "value null violates unique id", Slug(name="No id").create)
 
         self.assertEqual(len(self.records("slug")), 1)
         self.assertEqual(self.record("slug", "abc.slug.main.unum")["name"], "Sure")
@@ -240,10 +240,10 @@ class TestSource(unittest.TestCase):
         Unit([["stuff"], ["people"]]).create()
 
         models = Unit.one(name__in=["people", "stuff"])
-        self.assertRaisesRegex(relations.ModelError, "unit: more than one retrieved", models.retrieve)
+        self.assertRaisesRegex(relations.MultipleError, "unit: more than one retrieved", models.retrieve)
 
         model = Unit.one(name="things")
-        self.assertRaisesRegex(relations.ModelError, "unit: none retrieved", model.retrieve)
+        self.assertRaisesRegex(relations.NotFoundError, "unit: none retrieved", model.retrieve)
 
         self.assertIsNone(model.retrieve(False))
 
@@ -645,12 +645,16 @@ class TestSource(unittest.TestCase):
 
     def test_uniques(self):
 
+        # the source raises core's unique error
+
+        self.assertIs(relations_redis.Source.UniqueError, relations.UniqueError)
+
         Simple("ya").create()
 
         # creating a duplicate of a unique field raises and does not persist
 
         self.assertRaisesRegex(
-            relations_redis.Source.UniqueError,
+            relations.UniqueError,
             'simple: value {"name": "ya"} violates unique name',
             Simple("ya").create
         )
@@ -665,7 +669,7 @@ class TestSource(unittest.TestCase):
         sure.name = "ya"
 
         self.assertRaisesRegex(
-            relations_redis.Source.UniqueError,
+            relations.UniqueError,
             'simple: value {"name": "ya"} violates unique name',
             sure.update
         )

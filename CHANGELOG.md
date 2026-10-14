@@ -13,6 +13,11 @@ All notable changes to python-relations-redis are recorded here, newest first. F
 - Every `docker run` in the `Makefile` uses `--rm`, and a replaced database container is removed with its volume (`docker rm --force -v`), so builds and test runs leave no stopped containers or volumes behind.
 - `testpypi` and `pypi` run in the current `python` image with `build` and `twine` installed on the fly, so the custom `gaf3/pypi` image is no longer used.
 
+## [0.2.5] - 2026-10-14
+
+### Changed
+- The source raises relations-dil's errors: `Source.UniqueError` is `relations.UniqueError` instead of its own class, and "none retrieved" and "more than one retrieved" are `relations.NotFoundError` and `relations.MultipleError` (same messages, still `ModelError`s). Needs relations-dil 0.6.19 (relations-dil/python-relations#78).
+
 ## [0.2.4] - 2026-10-14
 
 ### Fixed
