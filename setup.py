@@ -21,7 +21,7 @@ setup(
     ],
     install_requires=[
         'redis==3.5.2',
-        'relations-dil>=0.6.14'
+        'relations-dil>=0.6.18'
     ],
     url="https://github.com/relations-dil/python-relations-redis",
     author="Gaffer Fitch",
