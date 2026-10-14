@@ -86,10 +86,7 @@ class Source(relations.Source):
 
         return values
 
-    class UniqueError(relations.model.ModelError):
-        """
-        Exception for violating unique constraints
-        """
+    UniqueError = relations.UniqueError
 
     def uniques(self, model, values, id):
         """
@@ -249,14 +246,14 @@ class Source(relations.Source):
                 matches.append(record)
 
         if model._mode == "one" and len(matches) > 1:
-            raise relations.model.ModelError(model, "more than one retrieved")
+            raise relations.MultipleError(model, "more than one retrieved")
 
         if model._mode == "one" and model._role != "child":
 
             if len(matches) < 1:
 
                 if verify:
-                    raise relations.model.ModelError(model, "none retrieved")
+                    raise relations.NotFoundError(model, "none retrieved")
 
                 return None
 
