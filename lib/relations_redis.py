@@ -121,11 +121,17 @@ class Source(relations.Source):
 
             values = creating._record.create({})
 
-            new_id = self.connection.incr(self._id_key(model.NAME))
+            # An id the caller supplies (a string) is the key, else the next number is
 
-            if model._id is not None and values.get(model._id) is None:
-                values[model._fields._names[model._id].store] = new_id
-                creating[model._id] = new_id
+            if model._id is not None and not model._fields._names[model._id].auto:
+                new_id = values.get(model._fields._names[model._id].store)
+                if new_id is None or self.connection.exists(self._record_key(model.NAME, new_id)):
+                    raise self.UniqueError(model, f"value {json.dumps(new_id)} violates unique {model._id}")
+            else:
+                new_id = self.connection.incr(self._id_key(model.NAME))
+                if model._id is not None and values.get(model._id) is None:
+                    values[model._fields._names[model._id].store] = new_id
+                    creating[model._id] = new_id
 
             self.uniques(creating, values, new_id)
 
@@ -168,13 +174,17 @@ class Source(relations.Source):
 
         prefix = self._store_key(name)
 
+        counter = self._id_key(name)
+
         items = [
-            (key.rsplit(":", 1)[-1], json.loads(self.connection.get(key)))
+            (key[len(prefix) + 1:], json.loads(self.connection.get(key)))
             for key in self.connection.scan_iter(match=f"{prefix}:*")
-            if not key.endswith(":_id")
+            if key != counter
         ]
 
-        return sorted(items, key=lambda item: int(item[0]))
+        # Numbers as numbers, ahead of any other id, which sorts as a string
+
+        return sorted(items, key=lambda item: (not item[0].isdigit(), int(item[0]) if item[0].isdigit() else 0, item[0]))
 
     def model_like(self, model):
         """

@@ -19,6 +19,17 @@ class Simple(SourceModel):
     id = int
     name = str
 
+class Slug(SourceModel):
+    id = str
+    name = str
+
+class Piece(SourceModel):
+    id = str
+    slug_id = str
+    name = str
+
+relations.OneToMany(Slug, Piece)
+
 class Plain(SourceModel):
     ID = None
     simple_id = int
@@ -195,6 +206,92 @@ class TestSource(unittest.TestCase):
             {"sis_id": sis.id, "bro_id": 3},
             {"sis_id": sis.id, "bro_id": 4}
         ])
+
+    def test_create_string_id(self):
+
+        slug = Slug("abc.slug.main.unum", "Sure")
+        slug.piece.add("abc.piece.main.unum", name="fine")
+        slug.create()
+
+        self.assertEqual(slug.id, "abc.slug.main.unum")
+        self.assertEqual(slug.piece[0].slug_id, "abc.slug.main.unum")
+        self.assertEqual(slug._action, "update")
+
+        self.assertEqual(self.record("slug", "abc.slug.main.unum"), {"id": "abc.slug.main.unum", "name": "Sure"})
+        self.assertEqual(self.record("piece", "abc.piece.main.unum"), {"id": "abc.piece.main.unum", "slug_id": "abc.slug.main.unum", "name": "fine"})
+
+        # A supplied id doesn't use the counter
+
+        self.assertIsNone(self.source.connection.get(self.source._id_key("slug")))
+
+        # A repeated or missing id is refused and writes nothing
+
+        self.assertRaisesRegex(relations_redis.Source.UniqueError, 'value "abc.slug.main.unum" violates unique id', Slug("abc.slug.main.unum", "Dupe").create)
+        self.assertRaisesRegex(relations_redis.Source.UniqueError, "value null violates unique id", Slug(name="No id").create)
+
+        self.assertEqual(len(self.records("slug")), 1)
+        self.assertEqual(self.record("slug", "abc.slug.main.unum")["name"], "Sure")
+
+        # Bulk is the same
+
+        Slug.bulk().add("b.slug", "Bulk").create()
+        self.assertEqual(self.record("slug", "b.slug"), {"id": "b.slug", "name": "Bulk"})
+
+    def test_retrieve_string_id(self):
+
+        for id in ["b.slug", "a:slug", "a.slug", "10", "9"]:
+            Slug(id, id.upper()).create()
+
+        # Sorted as strings, "10" before "9", with dots and colons in the ids
+
+        self.assertEqual([slug.id for slug in Slug.many()], ["10", "9", "a.slug", "a:slug", "b.slug"])
+        self.assertEqual(Slug.one("a:slug").name, "A:SLUG")
+        self.assertEqual(Slug.one(id="a.slug").name, "A.SLUG")
+        self.assertEqual([slug.id for slug in Slug.many(id__in=["9", "b.slug"])], ["9", "b.slug"])
+        self.assertEqual(Slug.many().count(), 5)
+
+        # Int ids still sort as numbers
+
+        for index in range(10):
+            Simple(f"n{index}").create()
+
+        self.assertEqual([simple.id for simple in Simple.many()], list(range(1, 11)))
+
+    def test_update_string_id(self):
+
+        Slug("a.slug", "A").create()
+        Slug("b.slug", "B").create()
+
+        self.assertEqual(Slug.one("a.slug").set(name="Changed").update(), 1)
+        self.assertEqual(self.record("slug", "a.slug"), {"id": "a.slug", "name": "Changed"})
+
+        # The id is readonly, an edit goes nowhere
+
+        slug = Slug.one("a.slug")
+        slug.id = "z.slug"
+        slug.name = "Again"
+        slug.update()
+
+        self.assertEqual(slug.id, "a.slug")
+        self.assertEqual(self.record("slug", "a.slug"), {"id": "a.slug", "name": "Again"})
+        self.assertEqual(len(self.records("slug")), 2)
+
+        # Mass update
+
+        self.assertEqual(Slug.many(id__in=["a.slug", "b.slug"]).set(name="Mass").update(), 2)
+        self.assertEqual([self.record("slug", id)["name"] for id in ["a.slug", "b.slug"]], ["Mass", "Mass"])
+
+    def test_delete_string_id(self):
+
+        Slug("a.slug", "A").create()
+        Slug("b.slug", "B").create()
+
+        self.assertEqual(Slug.one("a.slug").delete(), 1)
+        self.assertEqual(self.source.connection.exists(self.source._record_key("slug", "a.slug")), 0)
+        self.assertEqual([slug.id for slug in Slug.many()], ["b.slug"])
+
+        self.assertEqual(Slug.many(id__in=["b.slug"]).delete(), 1)
+        self.assertEqual(self.records("slug"), [])
 
     def test_retrieve(self):
 

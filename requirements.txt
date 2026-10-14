@@ -1,4 +1,4 @@
-relations-dil==0.6.15
+relations-dil @ git+https://github.com/relations-dil/python-relations.git@00fb4c2949938f3a47e46cb9c419b82305eda930
 redis==3.5.2
 ptvsd==4.3.2
 coverage==5.2.1
